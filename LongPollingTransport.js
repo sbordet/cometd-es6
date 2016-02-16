@@ -1,9 +1,9 @@
-var Transport = require('./Transport');
-var RequestTransport = require('./RequestTransport');
+import Transport, { derive } from './Transport';
+import RequestTransport from './RequestTransport';
 
-LongPollingTransport = function() {
+export default function LongPollingTransport() {
     var _super = new RequestTransport();
-    var _self = Transport.derive(_super);
+    var _self = derive(_super);
     // By default, support cross domain
     var _supportsCrossDomain = true;
 
@@ -90,5 +90,3 @@ LongPollingTransport = function() {
 
     return _self;
 };
-
-module.exports = LongPollingTransport;

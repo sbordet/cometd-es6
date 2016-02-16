@@ -1,9 +1,9 @@
-var Utils = require('./Utils');
-var Transport = require('./Transport');
+import Utils from './Utils';
+import Transport, { derive } from './Transport';
 
-WebSocketTransport = function() {
+export default function WebSocketTransport() {
     var _super = new Transport();
-    var _self = Transport.derive(_super);
+    var _self = derive(_super);
     var _cometd;
     // By default WebSocket is supported
     var _webSocketSupported = true;
@@ -363,5 +363,3 @@ WebSocketTransport = function() {
 
     return _self;
 };
-
-module.exports = WebSocketTransport;

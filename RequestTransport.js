@@ -1,5 +1,5 @@
-var Utils = require('./Utils');
-var Transport = require('./Transport');
+import Utils from './Utils';
+import Transport, { derive } from './Transport';
 
 /**
  * Base object with the common functionality for transports based on requests.
@@ -8,9 +8,9 @@ var Transport = require('./Transport');
  * To achieve this, we have one reserved request for the long poll, and all other
  * requests are serialized one after the other.
  */
-RequestTransport = function() {
+export default function RequestTransport() {
     var _super = new Transport();
-    var _self = Transport.derive(_super);
+    var _self = derive(_super);
     var _requestIds = 0;
     var _metaConnectRequest = null;
     var _requests = [];
@@ -241,5 +241,3 @@ RequestTransport = function() {
 
     return _self;
 };
-
-module.exports = RequestTransport;

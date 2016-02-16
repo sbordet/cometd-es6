@@ -1,9 +1,9 @@
-var Transport = require('./Transport');
-var RequestTransport = require('./RequestTransport');
+import Transport, { derive } from './Transport';
+import RequestTransport from './RequestTransport';
 
-CallbackPollingTransport = function() {
+export default function CallbackPollingTransport() {
     var _super = new RequestTransport();
-    var _self = Transport.derive(_super);
+    var _self = derive(_super);
 
     _self.accept = function(version, crossDomain, url) {
         return true;
@@ -135,5 +135,3 @@ CallbackPollingTransport = function() {
 
     return _self;
 };
-
-module.exports = CallbackPollingTransport;

@@ -1,5 +1,5 @@
-var Utils = require('./Utils');
-var TransportRegistry = require('./TransportRegistry');
+import Utils from './Utils';
+import TransportRegistry from './TransportRegistry';
 
 /**
  * The constructor for a CometD object, identified by an optional name.
@@ -19,7 +19,8 @@ var TransportRegistry = require('./TransportRegistry');
  * </pre>
  * @param name the optional name of this cometd object
  */
-CometD = function(name) {
+
+ export default function CometD(name) {
     var _cometd = this;
     var _name = name || 'default';
     var _crossDomain = false;
@@ -1920,5 +1921,3 @@ CometD = function(name) {
         return this._mixin(true, {}, _advice);
     };
 };
-
-module.exports = CometD;

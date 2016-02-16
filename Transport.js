@@ -1,9 +1,9 @@
-var Utils = require('./Utils');
+import Utils from './Utils';
 
 /**
  * Base object with the common functionality for transports.
  */
-Transport = function() {
+export default function Transport() {
     var _type;
     var _cometd;
     var _url;
@@ -123,12 +123,10 @@ Transport = function() {
     };
 };
 
-Transport.derive = function(baseObject) {
+export function derive(baseObject) {
     function F() {
     }
 
     F.prototype = baseObject;
     return new F();
 };
-
-module.exports = Transport;
