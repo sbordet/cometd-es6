@@ -1,11 +1,11 @@
-isString = function(value) {
+function isString(value) {
     if (value === undefined || value === null) {
         return false;
     }
     return typeof value === 'string' || value instanceof String;
 };
 
-isArray = function(value) {
+function isArray(value) {
     if (value === undefined || value === null) {
         return false;
     }
@@ -18,7 +18,7 @@ isArray = function(value) {
  * @param array the array to check for the element presence
  * @return the index of the element, if present, or a negative index if the element is not present
  */
-inArray = function(element, array) {
+function inArray(element, array) {
     for (var i = 0; i < array.length; ++i) {
         if (element === array[i]) {
             return i;
@@ -27,7 +27,7 @@ inArray = function(element, array) {
     return -1;
 };
 
-setTimeout = function(cometd, funktion, delay) {
+function cometd_setTimeout(cometd, funktion, delay) {
     return window.setTimeout(function() {
         try {
             cometd._debug('Invoking timed function', funktion);
@@ -38,14 +38,14 @@ setTimeout = function(cometd, funktion, delay) {
     }, delay);
 };
 
-clearTimeout = function(timeoutHandle) {
+function cometd_clearTimeout(timeoutHandle) {
     window.clearTimeout(timeoutHandle);
 };
 
 module.exports = {
-    isString,
-    isArray,
-    inArray,
-    setTimeout,
-    clearTimeout
+    isString: isString,
+    isArray: isArray,
+    inArray: inArray,
+    setTimeout: cometd_setTimeout,
+    clearTimeout: cometd_clearTimeout
 };
