@@ -165,7 +165,7 @@ export default function WebSocketTransport() {
                         _forceClose.call(self, context, {code: 1000, reason: 'Message Timeout'});
                     }, delay);
                 }
-            })();
+            }.call(this));
         }
 
         this._debug('Transport', this.getType(), 'waiting at most', delay, 'ms for messages', messageIds, 'maxNetworkDelay', maxDelay, ', timeouts:', context.timeouts);
