@@ -4,158 +4,6 @@
 Object.defineProperty(exports, "__esModule", {
     value: true
 });
-exports.default = CallbackPollingTransport;
-
-var _Transport = require('./Transport');
-
-var _Transport2 = _interopRequireDefault(_Transport);
-
-var _RequestTransport = require('./RequestTransport');
-
-var _RequestTransport2 = _interopRequireDefault(_RequestTransport);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function CallbackPollingTransport() {
-    var _super = new _RequestTransport2.default();
-    var _self = (0, _Transport.derive)(_super);
-
-    _self.accept = function (version, crossDomain, url) {
-        return true;
-    };
-
-    _self.jsonpSend = function (packet) {
-        throw 'Abstract';
-    };
-
-    function _failTransportFn(envelope, request, x) {
-        var self = this;
-        return function () {
-            self.transportFailure(envelope, request, 'error', x);
-        };
-    }
-
-    _self.transportSend = function (envelope, request) {
-        var self = this;
-
-        // Microsoft Internet Explorer has a 2083 URL max length
-        // We must ensure that we stay within that length
-        var start = 0;
-        var length = envelope.messages.length;
-        var lengths = [];
-        while (length > 0) {
-            // Encode the messages because all brackets, quotes, commas, colons, etc
-            // present in the JSON will be URL encoded, taking many more characters
-            var json = JSON.stringify(envelope.messages.slice(start, start + length));
-            var urlLength = envelope.url.length + encodeURI(json).length;
-
-            var maxLength = this.getConfiguration().maxURILength;
-            if (urlLength > maxLength) {
-                if (length === 1) {
-                    var x = 'Bayeux message too big (' + urlLength + ' bytes, max is ' + maxLength + ') ' + 'for transport ' + this.getType();
-                    // Keep the semantic of calling response callbacks asynchronously after the request
-                    this.setTimeout(_failTransportFn.call(this, envelope, request, x), 0);
-                    return;
-                }
-
-                --length;
-                continue;
-            }
-
-            lengths.push(length);
-            start += length;
-            length = envelope.messages.length - start;
-        }
-
-        // Here we are sure that the messages can be sent within the URL limit
-
-        var envelopeToSend = envelope;
-        if (lengths.length > 1) {
-            var begin = 0;
-            var end = lengths[0];
-            this._debug('Transport', this.getType(), 'split', envelope.messages.length, 'messages into', lengths.join(' + '));
-            envelopeToSend = this._mixin(false, {}, envelope);
-            envelopeToSend.messages = envelope.messages.slice(begin, end);
-            envelopeToSend.onSuccess = envelope.onSuccess;
-            envelopeToSend.onFailure = envelope.onFailure;
-
-            for (var i = 1; i < lengths.length; ++i) {
-                var nextEnvelope = this._mixin(false, {}, envelope);
-                begin = end;
-                end += lengths[i];
-                nextEnvelope.messages = envelope.messages.slice(begin, end);
-                nextEnvelope.onSuccess = envelope.onSuccess;
-                nextEnvelope.onFailure = envelope.onFailure;
-                this.send(nextEnvelope, request.metaConnect);
-            }
-        }
-
-        this._debug('Transport', this.getType(), 'sending request', request.id, 'envelope', envelopeToSend);
-
-        try {
-            var sameStack = true;
-            this.jsonpSend({
-                transport: this,
-                url: envelopeToSend.url,
-                sync: envelopeToSend.sync,
-                headers: this.getConfiguration().requestHeaders,
-                body: JSON.stringify(envelopeToSend.messages),
-                onSuccess: function onSuccess(responses) {
-                    var success = false;
-                    try {
-                        var received = self.convertToMessages(responses);
-                        if (received.length === 0) {
-                            self.transportFailure(envelopeToSend, request, {
-                                httpCode: 204
-                            });
-                        } else {
-                            success = true;
-                            self.transportSuccess(envelopeToSend, request, received);
-                        }
-                    } catch (x) {
-                        self._debug(x);
-                        if (!success) {
-                            self.transportFailure(envelopeToSend, request, {
-                                exception: x
-                            });
-                        }
-                    }
-                },
-                onError: function onError(reason, exception) {
-                    var failure = {
-                        reason: reason,
-                        exception: exception
-                    };
-                    if (sameStack) {
-                        // Keep the semantic of calling response callbacks asynchronously after the request
-                        self.setTimeout(function () {
-                            self.transportFailure(envelopeToSend, request, failure);
-                        }, 0);
-                    } else {
-                        self.transportFailure(envelopeToSend, request, failure);
-                    }
-                }
-            });
-            sameStack = false;
-        } catch (xx) {
-            // Keep the semantic of calling response callbacks asynchronously after the request
-            this.setTimeout(function () {
-                self.transportFailure(envelopeToSend, request, {
-                    exception: xx
-                });
-            }, 0);
-        }
-    };
-
-    return _self;
-};
-
-},{"./RequestTransport":4,"./Transport":5}],2:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
 
@@ -2092,7 +1940,365 @@ function CometD(name) {
     };
 };
 
-},{"./TransportRegistry":6,"./Utils":7}],3:[function(require,module,exports){
+},{"./TransportRegistry":2,"./Utils":3}],2:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.default = TransportRegistry;
+/**
+ * A registry for transports used by the CometD object.
+ */
+function TransportRegistry() {
+    var _types = [];
+    var _transports = {};
+
+    this.getTransportTypes = function () {
+        return _types.slice(0);
+    };
+
+    this.findTransportTypes = function (version, crossDomain, url) {
+        var result = [];
+        for (var i = 0; i < _types.length; ++i) {
+            var type = _types[i];
+            if (_transports[type].accept(version, crossDomain, url) === true) {
+                result.push(type);
+            }
+        }
+        return result;
+    };
+
+    this.negotiateTransport = function (types, version, crossDomain, url) {
+        for (var i = 0; i < _types.length; ++i) {
+            var type = _types[i];
+            for (var j = 0; j < types.length; ++j) {
+                if (type === types[j]) {
+                    var transport = _transports[type];
+                    if (transport.accept(version, crossDomain, url) === true) {
+                        return transport;
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
+    this.add = function (type, transport, index) {
+        var existing = false;
+        for (var i = 0; i < _types.length; ++i) {
+            if (_types[i] === type) {
+                existing = true;
+                break;
+            }
+        }
+
+        if (!existing) {
+            if (typeof index !== 'number') {
+                _types.push(type);
+            } else {
+                _types.splice(index, 0, type);
+            }
+            _transports[type] = transport;
+        }
+
+        return !existing;
+    };
+
+    this.find = function (type) {
+        for (var i = 0; i < _types.length; ++i) {
+            if (_types[i] === type) {
+                return _transports[type];
+            }
+        }
+        return null;
+    };
+
+    this.remove = function (type) {
+        for (var i = 0; i < _types.length; ++i) {
+            if (_types[i] === type) {
+                _types.splice(i, 1);
+                var transport = _transports[type];
+                delete _transports[type];
+                return transport;
+            }
+        }
+        return null;
+    };
+
+    this.clear = function () {
+        _types = [];
+        _transports = {};
+    };
+
+    this.reset = function (init) {
+        for (var i = 0; i < _types.length; ++i) {
+            _transports[_types[i]].reset(init);
+        }
+    };
+};
+
+},{}],3:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.isString = isString;
+exports.isArray = isArray;
+exports.inArray = inArray;
+exports.setTimeout = setTimeout;
+exports.clearTimeout = clearTimeout;
+function isString(value) {
+    if (value === undefined || value === null) {
+        return false;
+    }
+    return typeof value === 'string' || value instanceof String;
+};
+
+function isArray(value) {
+    if (value === undefined || value === null) {
+        return false;
+    }
+    return value instanceof Array;
+};
+
+/**
+ * Returns whether the given element is contained into the given array.
+ * @param element the element to check presence for
+ * @param array the array to check for the element presence
+ * @return the index of the element, if present, or a negative index if the element is not present
+ */
+function inArray(element, array) {
+    for (var i = 0; i < array.length; ++i) {
+        if (element === array[i]) {
+            return i;
+        }
+    }
+    return -1;
+};
+
+function setTimeout(cometd, funktion, delay) {
+    return window.setTimeout(function () {
+        try {
+            cometd._debug('Invoking timed function', funktion);
+            funktion();
+        } catch (x) {
+            cometd._debug('Exception invoking timed function', funktion, x);
+        }
+    }, delay);
+};
+
+function clearTimeout(timeoutHandle) {
+    window.clearTimeout(timeoutHandle);
+};
+
+exports.default = {
+    isString: isString,
+    isArray: isArray,
+    inArray: inArray,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout
+};
+
+},{}],4:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+
+var _CometD = require('./CometD');
+
+Object.defineProperty(exports, 'CometD', {
+  enumerable: true,
+  get: function get() {
+    return _interopRequireDefault(_CometD).default;
+  }
+});
+
+var _TransportRegistry = require('./TransportRegistry');
+
+Object.defineProperty(exports, 'TransportRegistry', {
+  enumerable: true,
+  get: function get() {
+    return _interopRequireDefault(_TransportRegistry).default;
+  }
+});
+
+var _transports = require('./transports');
+
+var _loop = function _loop(_key2) {
+  if (_key2 === "default") return 'continue';
+  Object.defineProperty(exports, _key2, {
+    enumerable: true,
+    get: function get() {
+      return _transports[_key2];
+    }
+  });
+};
+
+for (var _key2 in _transports) {
+  var _ret = _loop(_key2);
+
+  if (_ret === 'continue') continue;
+}
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+},{"./CometD":1,"./TransportRegistry":2,"./transports":10}],5:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.default = CallbackPollingTransport;
+
+var _Transport = require('./Transport');
+
+var _Transport2 = _interopRequireDefault(_Transport);
+
+var _RequestTransport = require('./RequestTransport');
+
+var _RequestTransport2 = _interopRequireDefault(_RequestTransport);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function CallbackPollingTransport() {
+    var _super = new _RequestTransport2.default();
+    var _self = (0, _Transport.derive)(_super);
+
+    _self.accept = function (version, crossDomain, url) {
+        return true;
+    };
+
+    _self.jsonpSend = function (packet) {
+        throw 'Abstract';
+    };
+
+    function _failTransportFn(envelope, request, x) {
+        var self = this;
+        return function () {
+            self.transportFailure(envelope, request, 'error', x);
+        };
+    }
+
+    _self.transportSend = function (envelope, request) {
+        var self = this;
+
+        // Microsoft Internet Explorer has a 2083 URL max length
+        // We must ensure that we stay within that length
+        var start = 0;
+        var length = envelope.messages.length;
+        var lengths = [];
+        while (length > 0) {
+            // Encode the messages because all brackets, quotes, commas, colons, etc
+            // present in the JSON will be URL encoded, taking many more characters
+            var json = JSON.stringify(envelope.messages.slice(start, start + length));
+            var urlLength = envelope.url.length + encodeURI(json).length;
+
+            var maxLength = this.getConfiguration().maxURILength;
+            if (urlLength > maxLength) {
+                if (length === 1) {
+                    var x = 'Bayeux message too big (' + urlLength + ' bytes, max is ' + maxLength + ') ' + 'for transport ' + this.getType();
+                    // Keep the semantic of calling response callbacks asynchronously after the request
+                    this.setTimeout(_failTransportFn.call(this, envelope, request, x), 0);
+                    return;
+                }
+
+                --length;
+                continue;
+            }
+
+            lengths.push(length);
+            start += length;
+            length = envelope.messages.length - start;
+        }
+
+        // Here we are sure that the messages can be sent within the URL limit
+
+        var envelopeToSend = envelope;
+        if (lengths.length > 1) {
+            var begin = 0;
+            var end = lengths[0];
+            this._debug('Transport', this.getType(), 'split', envelope.messages.length, 'messages into', lengths.join(' + '));
+            envelopeToSend = this._mixin(false, {}, envelope);
+            envelopeToSend.messages = envelope.messages.slice(begin, end);
+            envelopeToSend.onSuccess = envelope.onSuccess;
+            envelopeToSend.onFailure = envelope.onFailure;
+
+            for (var i = 1; i < lengths.length; ++i) {
+                var nextEnvelope = this._mixin(false, {}, envelope);
+                begin = end;
+                end += lengths[i];
+                nextEnvelope.messages = envelope.messages.slice(begin, end);
+                nextEnvelope.onSuccess = envelope.onSuccess;
+                nextEnvelope.onFailure = envelope.onFailure;
+                this.send(nextEnvelope, request.metaConnect);
+            }
+        }
+
+        this._debug('Transport', this.getType(), 'sending request', request.id, 'envelope', envelopeToSend);
+
+        try {
+            var sameStack = true;
+            this.jsonpSend({
+                transport: this,
+                url: envelopeToSend.url,
+                sync: envelopeToSend.sync,
+                headers: this.getConfiguration().requestHeaders,
+                body: JSON.stringify(envelopeToSend.messages),
+                onSuccess: function onSuccess(responses) {
+                    var success = false;
+                    try {
+                        var received = self.convertToMessages(responses);
+                        if (received.length === 0) {
+                            self.transportFailure(envelopeToSend, request, {
+                                httpCode: 204
+                            });
+                        } else {
+                            success = true;
+                            self.transportSuccess(envelopeToSend, request, received);
+                        }
+                    } catch (x) {
+                        self._debug(x);
+                        if (!success) {
+                            self.transportFailure(envelopeToSend, request, {
+                                exception: x
+                            });
+                        }
+                    }
+                },
+                onError: function onError(reason, exception) {
+                    var failure = {
+                        reason: reason,
+                        exception: exception
+                    };
+                    if (sameStack) {
+                        // Keep the semantic of calling response callbacks asynchronously after the request
+                        self.setTimeout(function () {
+                            self.transportFailure(envelopeToSend, request, failure);
+                        }, 0);
+                    } else {
+                        self.transportFailure(envelopeToSend, request, failure);
+                    }
+                }
+            });
+            sameStack = false;
+        } catch (xx) {
+            // Keep the semantic of calling response callbacks asynchronously after the request
+            this.setTimeout(function () {
+                self.transportFailure(envelopeToSend, request, {
+                    exception: xx
+                });
+            }, 0);
+        }
+    };
+
+    return _self;
+};
+
+},{"./RequestTransport":7,"./Transport":8}],6:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2200,7 +2406,7 @@ function LongPollingTransport() {
     return _self;
 };
 
-},{"./RequestTransport":4,"./Transport":5}],4:[function(require,module,exports){
+},{"./RequestTransport":7,"./Transport":8}],7:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2208,7 +2414,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.default = RequestTransport;
 
-var _Utils = require('./Utils');
+var _Utils = require('../Utils');
 
 var _Utils2 = _interopRequireDefault(_Utils);
 
@@ -2458,7 +2664,7 @@ function RequestTransport() {
     return _self;
 };
 
-},{"./Transport":5,"./Utils":7}],5:[function(require,module,exports){
+},{"../Utils":3,"./Transport":8}],8:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2470,7 +2676,7 @@ var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol
 exports.default = Transport;
 exports.derive = derive;
 
-var _Utils = require('./Utils');
+var _Utils = require('../Utils');
 
 var _Utils2 = _interopRequireDefault(_Utils);
 
@@ -2606,168 +2812,7 @@ function derive(baseObject) {
     return new F();
 };
 
-},{"./Utils":7}],6:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.default = TransportRegistry;
-/**
- * A registry for transports used by the CometD object.
- */
-function TransportRegistry() {
-    var _types = [];
-    var _transports = {};
-
-    this.getTransportTypes = function () {
-        return _types.slice(0);
-    };
-
-    this.findTransportTypes = function (version, crossDomain, url) {
-        var result = [];
-        for (var i = 0; i < _types.length; ++i) {
-            var type = _types[i];
-            if (_transports[type].accept(version, crossDomain, url) === true) {
-                result.push(type);
-            }
-        }
-        return result;
-    };
-
-    this.negotiateTransport = function (types, version, crossDomain, url) {
-        for (var i = 0; i < _types.length; ++i) {
-            var type = _types[i];
-            for (var j = 0; j < types.length; ++j) {
-                if (type === types[j]) {
-                    var transport = _transports[type];
-                    if (transport.accept(version, crossDomain, url) === true) {
-                        return transport;
-                    }
-                }
-            }
-        }
-        return null;
-    };
-
-    this.add = function (type, transport, index) {
-        var existing = false;
-        for (var i = 0; i < _types.length; ++i) {
-            if (_types[i] === type) {
-                existing = true;
-                break;
-            }
-        }
-
-        if (!existing) {
-            if (typeof index !== 'number') {
-                _types.push(type);
-            } else {
-                _types.splice(index, 0, type);
-            }
-            _transports[type] = transport;
-        }
-
-        return !existing;
-    };
-
-    this.find = function (type) {
-        for (var i = 0; i < _types.length; ++i) {
-            if (_types[i] === type) {
-                return _transports[type];
-            }
-        }
-        return null;
-    };
-
-    this.remove = function (type) {
-        for (var i = 0; i < _types.length; ++i) {
-            if (_types[i] === type) {
-                _types.splice(i, 1);
-                var transport = _transports[type];
-                delete _transports[type];
-                return transport;
-            }
-        }
-        return null;
-    };
-
-    this.clear = function () {
-        _types = [];
-        _transports = {};
-    };
-
-    this.reset = function (init) {
-        for (var i = 0; i < _types.length; ++i) {
-            _transports[_types[i]].reset(init);
-        }
-    };
-};
-
-},{}],7:[function(require,module,exports){
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.isString = isString;
-exports.isArray = isArray;
-exports.inArray = inArray;
-exports.setTimeout = setTimeout;
-exports.clearTimeout = clearTimeout;
-function isString(value) {
-    if (value === undefined || value === null) {
-        return false;
-    }
-    return typeof value === 'string' || value instanceof String;
-};
-
-function isArray(value) {
-    if (value === undefined || value === null) {
-        return false;
-    }
-    return value instanceof Array;
-};
-
-/**
- * Returns whether the given element is contained into the given array.
- * @param element the element to check presence for
- * @param array the array to check for the element presence
- * @return the index of the element, if present, or a negative index if the element is not present
- */
-function inArray(element, array) {
-    for (var i = 0; i < array.length; ++i) {
-        if (element === array[i]) {
-            return i;
-        }
-    }
-    return -1;
-};
-
-function setTimeout(cometd, funktion, delay) {
-    return window.setTimeout(function () {
-        try {
-            cometd._debug('Invoking timed function', funktion);
-            funktion();
-        } catch (x) {
-            cometd._debug('Exception invoking timed function', funktion, x);
-        }
-    }, delay);
-};
-
-function clearTimeout(timeoutHandle) {
-    window.clearTimeout(timeoutHandle);
-};
-
-exports.default = {
-    isString: isString,
-    isArray: isArray,
-    inArray: inArray,
-    setTimeout: setTimeout,
-    clearTimeout: clearTimeout
-};
-
-},{}],8:[function(require,module,exports){
+},{"../Utils":3}],9:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -2775,7 +2820,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.default = WebSocketTransport;
 
-var _Utils = require('./Utils');
+var _Utils = require('../Utils');
 
 var _Utils2 = _interopRequireDefault(_Utils);
 
@@ -3148,21 +3193,11 @@ function WebSocketTransport() {
     return _self;
 };
 
-},{"./Transport":5,"./Utils":7}],9:[function(require,module,exports){
+},{"../Utils":3,"./Transport":8}],10:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
-});
-exports.WebSocketTransport = exports.LongPollingTransport = exports.CallbackPollingTransport = exports.TransportRegistry = exports.RequestTransport = exports.derive = exports.Transport = exports.CometD = undefined;
-
-var _CometD = require('./CometD');
-
-Object.defineProperty(exports, 'CometD', {
-  enumerable: true,
-  get: function get() {
-    return _interopRequireDefault(_CometD).default;
-  }
 });
 
 var _Transport = require('./Transport');
@@ -3186,15 +3221,6 @@ Object.defineProperty(exports, 'RequestTransport', {
   enumerable: true,
   get: function get() {
     return _interopRequireDefault(_RequestTransport).default;
-  }
-});
-
-var _TransportRegistry = require('./TransportRegistry');
-
-Object.defineProperty(exports, 'TransportRegistry', {
-  enumerable: true,
-  get: function get() {
-    return _interopRequireDefault(_TransportRegistry).default;
   }
 });
 
@@ -3225,11 +3251,7 @@ Object.defineProperty(exports, 'WebSocketTransport', {
   }
 });
 
-var _CometD2 = _interopRequireDefault(_CometD);
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-exports.default = _CometD2.default;
-
-},{"./CallbackPollingTransport":1,"./CometD":2,"./LongPollingTransport":3,"./RequestTransport":4,"./Transport":5,"./TransportRegistry":6,"./WebSocketTransport":8}]},{},[9])(9)
+},{"./CallbackPollingTransport":5,"./LongPollingTransport":6,"./RequestTransport":7,"./Transport":8,"./WebSocketTransport":9}]},{},[4])(4)
 });

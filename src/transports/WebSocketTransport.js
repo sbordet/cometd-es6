@@ -1,23 +1,9 @@
-'use strict';
+import Utils from '../Utils';
+import Transport, { derive } from './Transport';
 
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.default = WebSocketTransport;
-
-var _Utils = require('./Utils');
-
-var _Utils2 = _interopRequireDefault(_Utils);
-
-var _Transport = require('./Transport');
-
-var _Transport2 = _interopRequireDefault(_Transport);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function WebSocketTransport() {
-    var _super = new _Transport2.default();
-    var _self = (0, _Transport.derive)(_super);
+export default function WebSocketTransport() {
+    var _super = new Transport();
+    var _self = derive(_super);
     var _cometd;
     // By default WebSocket is supported
     var _webSocketSupported = true;
@@ -31,7 +17,7 @@ function WebSocketTransport() {
     var _connected = false;
     var _successCallback = null;
 
-    _self.reset = function (init) {
+    _self.reset = function(init) {
         _super.reset(init);
         _webSocketSupported = true;
         if (init) {
@@ -98,14 +84,14 @@ function WebSocketTransport() {
         var self = this;
         var connectTimeout = _cometd.getConfiguration().connectTimeout;
         if (connectTimeout > 0) {
-            context.connectTimer = this.setTimeout(function () {
+            context.connectTimer = this.setTimeout(function() {
                 _cometd._debug('Transport', self.getType(), 'timed out while connecting to URL', url, ':', connectTimeout, 'ms');
                 // The connection was not opened, close anyway.
-                _forceClose.call(self, context, { code: 1000, reason: 'Connect Timeout' });
+                _forceClose.call(self, context, {code: 1000, reason: 'Connect Timeout'});
             }, connectTimeout);
         }
 
-        var onopen = function onopen() {
+        var onopen = function() {
             _cometd._debug('WebSocket onopen', context);
             if (context.connectTimer) {
                 self.clearTimeout(context.connectTimer);
@@ -119,7 +105,7 @@ function WebSocketTransport() {
             } else {
                 // We have a valid connection already, close this one.
                 _cometd._warn('Closing extra WebSocket connection', this, 'active connection', _context);
-                _forceClose.call(self, context, { code: 1000, reason: 'Extra Connection' });
+                _forceClose.call(self, context, {code: 1000, reason: 'Extra Connection'});
             }
         };
 
@@ -127,8 +113,8 @@ function WebSocketTransport() {
         // The close frame for a connection may arrive *after* another
         // connection has been opened, so we must make sure that actions
         // are performed only if it's the same connection.
-        var onclose = function onclose(event) {
-            event = event || { code: 1000 };
+        var onclose = function(event) {
+            event = event || {code: 1000};
             _cometd._debug('WebSocket onclose', context, event, 'connecting', _connecting, 'current', _context);
 
             if (context.connectTimer) {
@@ -138,16 +124,16 @@ function WebSocketTransport() {
             self.onClose(context, event);
         };
 
-        var onmessage = function onmessage(wsMessage) {
+        var onmessage = function(wsMessage) {
             _cometd._debug('WebSocket onmessage', wsMessage, context);
             self.onMessage(context, wsMessage);
         };
 
         context.webSocket.onopen = onopen;
         context.webSocket.onclose = onclose;
-        context.webSocket.onerror = function () {
+        context.webSocket.onerror = function() {
             // Clients should call onclose(), but if they do not we do it here for safety.
-            onclose({ code: 1000, reason: 'Error' });
+            onclose({code: 1000, reason: 'Error'});
         };
         context.webSocket.onmessage = onmessage;
 
@@ -170,26 +156,26 @@ function WebSocketTransport() {
         var self = this;
         var messageIds = [];
         for (var i = 0; i < envelope.messages.length; ++i) {
-            (function () {
+            (function() {
                 var message = envelope.messages[i];
                 if (message.id) {
                     messageIds.push(message.id);
-                    context.timeouts[message.id] = this.setTimeout(function () {
+                    context.timeouts[message.id] = this.setTimeout(function() {
                         _cometd._debug('Transport', self.getType(), 'timing out message', message.id, 'after', delay, 'on', context);
-                        _forceClose.call(self, context, { code: 1000, reason: 'Message Timeout' });
+                        _forceClose.call(self, context, {code: 1000, reason: 'Message Timeout'});
                     }, delay);
                 }
-            }).call(this);
+            }.call(this));
         }
 
         this._debug('Transport', this.getType(), 'waiting at most', delay, 'ms for messages', messageIds, 'maxNetworkDelay', maxDelay, ', timeouts:', context.timeouts);
     }
 
-    _self._notifySuccess = function (fn, messages) {
+    _self._notifySuccess = function(fn, messages) {
         fn.call(this, messages);
     };
 
-    _self._notifyFailure = function (fn, context, messages, failure) {
+    _self._notifyFailure = function(fn, context, messages, failure) {
         fn.call(this, context, messages, failure);
     };
 
@@ -197,9 +183,9 @@ function WebSocketTransport() {
         try {
             if (context === null) {
                 context = _connecting || {
-                    envelopes: {},
-                    timeouts: {}
-                };
+                        envelopes: {},
+                        timeouts: {}
+                    };
                 _storeEnvelope.call(this, context, envelope, metaConnect);
                 _websocketConnect.call(this, context);
             } else {
@@ -209,7 +195,7 @@ function WebSocketTransport() {
         } catch (x) {
             // Keep the semantic of calling response callbacks asynchronously after the request.
             var self = this;
-            this.setTimeout(function () {
+            this.setTimeout(function() {
                 _forceClose.call(self, context, {
                     code: 1000,
                     reason: 'Exception',
@@ -219,7 +205,7 @@ function WebSocketTransport() {
         }
     }
 
-    _self.onOpen = function (context) {
+    _self.onOpen = function(context) {
         var envelopes = context.envelopes;
         this._debug('Transport', this.getType(), 'opened', context, 'pending messages', envelopes);
         for (var key in envelopes) {
@@ -235,7 +221,7 @@ function WebSocketTransport() {
         }
     };
 
-    _self.onMessage = function (context, wsMessage) {
+    _self.onMessage = function(context, wsMessage) {
         this._debug('Transport', this.getType(), 'received websocket message', wsMessage, context);
 
         var close = false;
@@ -276,7 +262,7 @@ function WebSocketTransport() {
             for (var key in envelopes) {
                 if (envelopes.hasOwnProperty(key)) {
                     var ids = key.split(',');
-                    var index = _Utils2.default.inArray(id, ids);
+                    var index = Utils.inArray(id, ids);
                     if (index >= 0) {
                         removed = true;
                         ids.splice(index, 1);
@@ -302,7 +288,7 @@ function WebSocketTransport() {
         }
     };
 
-    _self.onClose = function (context, event) {
+    _self.onClose = function(context, event) {
         this._debug('Transport', this.getType(), 'closed', context, event);
 
         if (_sameContext(context)) {
@@ -343,23 +329,23 @@ function WebSocketTransport() {
         }
     };
 
-    _self.registered = function (type, cometd) {
+    _self.registered = function(type, cometd) {
         _super.registered(type, cometd);
         _cometd = cometd;
     };
 
-    _self.accept = function (version, crossDomain, url) {
+    _self.accept = function(version, crossDomain, url) {
         this._debug('Transport', this.getType(), 'accept, supported:', _webSocketSupported);
         // Using !! to return a boolean (and not the WebSocket object).
         return _webSocketSupported && !!window.WebSocket && _cometd.websocketEnabled !== false;
     };
 
-    _self.send = function (envelope, metaConnect) {
+    _self.send = function(envelope, metaConnect) {
         this._debug('Transport', this.getType(), 'sending', envelope, 'metaConnect =', metaConnect);
         _send.call(this, _context, envelope, metaConnect);
     };
 
-    _self.webSocketClose = function (context, code, reason) {
+    _self.webSocketClose = function(context, code, reason) {
         try {
             if (context.webSocket) {
                 context.webSocket.close(code, reason);
@@ -369,9 +355,9 @@ function WebSocketTransport() {
         }
     };
 
-    _self.abort = function () {
+    _self.abort = function() {
         _super.abort();
-        _forceClose.call(this, _context, { code: 1000, reason: 'Abort' });
+        _forceClose.call(this, _context, {code: 1000, reason: 'Abort'});
         this.reset(true);
     };
 

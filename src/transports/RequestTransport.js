@@ -1,19 +1,5 @@
-'use strict';
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.default = RequestTransport;
-
-var _Utils = require('./Utils');
-
-var _Utils2 = _interopRequireDefault(_Utils);
-
-var _Transport = require('./Transport');
-
-var _Transport2 = _interopRequireDefault(_Transport);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+import Utils from '../Utils';
+import Transport, { derive } from './Transport';
 
 /**
  * Base object with the common functionality for transports based on requests.
@@ -22,9 +8,9 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
  * To achieve this, we have one reserved request for the long poll, and all other
  * requests are serialized one after the other.
  */
-function RequestTransport() {
-    var _super = new _Transport2.default();
-    var _self = (0, _Transport.derive)(_super);
+export default function RequestTransport() {
+    var _super = new Transport();
+    var _self = derive(_super);
     var _requestIds = 0;
     var _metaConnectRequest = null;
     var _requests = [];
@@ -35,7 +21,8 @@ function RequestTransport() {
             var envelopeAndRequest = _envelopes[0];
             var newEnvelope = envelopeAndRequest[0];
             var newRequest = envelopeAndRequest[1];
-            if (newEnvelope.url === envelope.url && newEnvelope.sync === envelope.sync) {
+            if (newEnvelope.url === envelope.url &&
+                newEnvelope.sync === envelope.sync) {
                 _envelopes.shift();
                 envelope.messages = envelope.messages.concat(newEnvelope.messages);
                 this._debug('Coalesced', newEnvelope.messages.length, 'messages from request', newRequest.id);
@@ -59,7 +46,7 @@ function RequestTransport() {
             this._debug('Transport', this.getType(), 'waiting at most', delay, 'ms for the response, maxNetworkDelay', maxDelay);
 
             var self = this;
-            request.timeout = this.setTimeout(function () {
+            request.timeout = this.setTimeout(function() {
                 request.expired = true;
                 var errorMessage = 'Request ' + request.id + ' of transport ' + self.getType() + ' exceeded ' + delay + ' ms max network delay';
                 var failure = {
@@ -105,7 +92,7 @@ function RequestTransport() {
     }
 
     function _complete(request, success) {
-        var index = _Utils2.default.inArray(request, _requests);
+        var index = Utils.inArray(request, _requests);
         // The index can be negative if the request has been aborted
         if (index >= 0) {
             _requests.splice(index, 1);
@@ -125,7 +112,7 @@ function RequestTransport() {
             } else {
                 // Keep the semantic of calling response callbacks asynchronously after the request
                 var self = this;
-                this.setTimeout(function () {
+                this.setTimeout(function() {
                     self.complete(nextRequest, false, nextRequest.metaConnect);
                     var failure = {
                         reason: 'Previous request failed'
@@ -138,7 +125,7 @@ function RequestTransport() {
         }
     }
 
-    _self.complete = function (request, success, metaConnect) {
+    _self.complete = function(request, success, metaConnect) {
         if (metaConnect) {
             _metaConnectComplete.call(this, request);
         } else {
@@ -151,11 +138,11 @@ function RequestTransport() {
      * @param envelope the envelope to send
      * @param request the request information
      */
-    _self.transportSend = function (envelope, request) {
+    _self.transportSend = function(envelope, request) {
         throw 'Abstract';
     };
 
-    _self.transportSuccess = function (envelope, request, responses) {
+    _self.transportSuccess = function(envelope, request, responses) {
         if (!request.expired) {
             this.clearTimeout(request.timeout);
             this.complete(request, true, request.metaConnect);
@@ -169,7 +156,7 @@ function RequestTransport() {
         }
     };
 
-    _self.transportFailure = function (envelope, request, failure) {
+    _self.transportFailure = function(envelope, request, failure) {
         if (!request.expired) {
             this.clearTimeout(request.timeout);
             this.complete(request, false, request.metaConnect);
@@ -193,7 +180,7 @@ function RequestTransport() {
         _metaConnectRequest = request;
     }
 
-    _self.send = function (envelope, metaConnect) {
+    _self.send = function(envelope, metaConnect) {
         if (metaConnect) {
             _metaConnectSend.call(this, envelope);
         } else {
@@ -201,34 +188,34 @@ function RequestTransport() {
         }
     };
 
-    _self.abort = function () {
+    _self.abort = function() {
         _super.abort();
         for (var i = 0; i < _requests.length; ++i) {
             var request = _requests[i];
             if (request) {
                 this._debug('Aborting request', request);
                 if (!this.abortXHR(request.xhr)) {
-                    this.transportFailure(request.envelope, request, { reason: 'abort' });
+                    this.transportFailure(request.envelope, request, {reason: 'abort'});
                 }
             }
         }
         if (_metaConnectRequest) {
             this._debug('Aborting metaConnect request', _metaConnectRequest);
             if (!this.abortXHR(_metaConnectRequest.xhr)) {
-                this.transportFailure(_metaConnectRequest.envelope, _metaConnectRequest, { reason: 'abort' });
+                this.transportFailure(_metaConnectRequest.envelope, _metaConnectRequest, {reason: 'abort'});
             }
         }
         this.reset(true);
     };
 
-    _self.reset = function (init) {
+    _self.reset = function(init) {
         _super.reset(init);
         _metaConnectRequest = null;
         _requests = [];
         _envelopes = [];
     };
 
-    _self.abortXHR = function (xhr) {
+    _self.abortXHR = function(xhr) {
         if (xhr) {
             try {
                 var state = xhr.readyState;
@@ -241,7 +228,7 @@ function RequestTransport() {
         return false;
     };
 
-    _self.xhrStatus = function (xhr) {
+    _self.xhrStatus = function(xhr) {
         if (xhr) {
             try {
                 return xhr.status;
