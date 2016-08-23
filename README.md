@@ -7,7 +7,7 @@ This library does not include the Dojo or jQuery plugins, and as such, the long-
 ## Usage
 
 ```js
-import CometD, { WebSocketTransport } from 'cometd';
+import { CometD, WebSocketTransport } from 'cometd';
 import { CallbackPollingTransport, LongPollingTransport } from 'cometd-transport-jquery';
 
 // Borrowed from https://github.com/cometd/cometd/blob/master/cometd-javascript/jquery/src/main/webapp/jquery/jquery.cometd.js#L93

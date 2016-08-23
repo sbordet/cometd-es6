@@ -4,8 +4,8 @@
   "description": "A implementation of the CometD client library as an ES6 module.",
   "main": "lib/index.js",
   "scripts": {
-    "build:dist": "mkdir dist && browserify src/index.js --standalone CometD --outfile dist/cometd.js -t [ babelify --presets [ es2015 ] ]",
-    "build:lib": "mkdir lib && babel src --out-dir lib --presets es2015",
+    "build:dist": "browserify src/index.js --standalone CometD --outfile dist/cometd.js -t [ babelify --presets [ es2015 ] ]",
+    "build:lib": "babel src --out-dir lib --presets es2015",
     "prepublish": "npm run build:dist && npm run build:lib"
   },
   "repository": {
